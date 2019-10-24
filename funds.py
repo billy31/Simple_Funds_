@@ -94,10 +94,10 @@ def get_url(url, params=None, proxies=None):
     return rsp.text
 
 
-def get_fund_data(code,sdate='',edate='',per=10,proxies=None):
+def get_fund_data(code,sdate='',edate='',online=False, per=10,proxies=None):
     print('Getting fund data of {:s}'.format(code))
     try:
-        if not os.path.exists('./Funds_data/{:s}.txt'.format(code)):    
+        if online:
             url = 'http://fund.eastmoney.com/f10/F10DataApi.aspx'
             params = {'type': 'lsjz', 'code': code, 'page':1,'per': per, 'sdate': sdate, 'edate': edate}
             html = get_url(url, params, proxies)
@@ -131,7 +131,7 @@ def get_fund_data(code,sdate='',edate='',per=10,proxies=None):
             # Un-chinese usage
             data.columns = ['Date', 'Value', 'Cumulative net Value', 'Growth rate', 
                             'Perchase state', 'Redemption state', 'Dividend']
-            data.to_csv('./Funds_data/{:s}.txt'.format(code), sep='\t')
+#            data.to_csv('./Funds_data/{:s}.txt'.format(code), sep='\t')
         else:
             data = pd.read_csv('./Funds_data/{:s}.txt'.format(code), sep='\t', 
                                index_col=False)    
