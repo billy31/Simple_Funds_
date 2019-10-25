@@ -13,11 +13,9 @@ Created on Mon Oct 14 21:34:10 2019
 import sqlite3 as sql
 import os, glob
 import datetime
-import numpy as np
 import pandas as pd
 import funds
 from multiprocessing import Pool
-
 
 def get_FileCreateTime(filePath):
       t = os.path.getctime(filePath)
@@ -52,14 +50,19 @@ def updateDatabase(dbtoday, connection, code, coltext):
         newdata = funds.get_fund_data(code, sdate=dbtoday, edate=today, online=True)
         try:
             for records in range(newdata.shape[0]):
-                sqlcom = 'INSERT INTO \"{:s}\" ({:s}) '.format(code, coltext) + \
-                'VALUES (?,?,?,?,?,?,?);'
-                data = newdata.loc[records].values.tolist()
-                sqlcom = sqlcom[:-1] + ';'
-                cursor.execute(sqlcom, data)               
+                try:
+                    sqlcom = 'INSERT INTO \"{:s}\" ({:s}) '.format(code, coltext) + \
+                    'VALUES (?,?,?,?,?,?,?);'
+                    data = newdata.loc[records].values.tolist()
+                    sqlcom = sqlcom[:-1] + ';'
+                    cursor.execute(sqlcom, data)
+                except Exception as e:
+                    print(e)
+                    continue
         except Exception as e:
             print(e)
-    print(1)
+    else:
+        print('No update {:s}'.format(code))
     cursor.close()
     connection.commit() 
             
@@ -72,64 +75,63 @@ def autoName(Names):
         if c == 'Dividend':
             colstr += ('\"' + c + '\"')
     return colstr
-#    Names = Names if '__iter__' in dir(Names) else list(Names)
-#    for dataName in Names:
-#        try:
-#            dataName = dataName.replace(' ', '')
-#            dataName = dataName.replace('%', '')
-#        except:
-#            continue
-#    return Names
-#    if 'Value' in dataName or 'value' in dataName or \
-#        'rate' in dataName or 'Rate' in dataName or \
-#        'profit' in dataName or 'Profit' in dataName or \
-#        'aim' in dataName:
-#        return dataName + ' Float '    
-#    else:    
-#        return dataName + ' Text '
 
-#
-#def create_table_name(tableName, colName):
-#    outStr = 'create table ' + tableName + ' '    
-#    if '__iter__' in dir(colName):
-#        for colCount, name in enumerate(colName):
-#            outStr +=  (autoTypeChooser(name) + 'Primary ') \
-#                        if colCount == 0 else \
-#                        autoTypeChooser(name)
-#    return outStr
-
-#def writingPD2SQL(database, Name, connection):
-#    database.to_sql(name=Name, con=connection)
-    
-    
-try: # Create database
-    conn = sql.connect("/home/lzy/funds/Funds Info.db")
-#    conn.execute("PRAGMA busy_timeout = 30000") 
-except Exception as e:
-    print('sql connection errors in: \"{:s}\"'.format(str(e)))
-else:
-    flag = True
-    try: # Generate table name list        
-        cur = conn.cursor()
-        tableNames = cur.execute('select name from sqlite_master where type=\"table\"').fetchall() 
+def execute_database(code, connection, coltext):
+    cur = connection.cursor()
+    top10 = cur.execute('select date from \"{:s}\" order by date desc limit 10'.format(code)).fetchall()
+    try:
+        latestDate = datetime.datetime.strptime(top10[0][0], '%Y-%m-%d')                    
     except Exception as e:
-        print('reading sqldb errors in: \"{:s}\"'.format(str(e)))
-        print('initializing...')
-        tableNames = initDatabase(conn)
-        flag = False
-    finally: # Checking timeliness
-        tableNames = [t[0] for t in tableNames] if flag else tableNames
-        cur.execute('select * from \"{:s}\" limit 10'.format(tableNames[0]))
-        coltext = autoName(cur.description)
-        for table in tableNames: # Read every table
-            top10 = cur.execute('select date from \"{:s}\" order by date desc limit 10'.format(table)).fetchall()
-#            conn.close()
-            latestDate = datetime.datetime.strptime(top10[0][0], '%Y-%m-%d')
-#            conn.close()    
-#            conn1 = sql.connect('Funds Info.db')
-#            curupdate = conn1.cursor()
-            updateDatabase(latestDate, conn, table, coltext)
-#            conn.commit()
-            break
-        
-        conn.close()
+        print(e)
+    else:
+        updateDatabase(latestDate, connection, code, coltext)
+    cur.close()
+    
+
+def codeProcessInputs(codeinput):
+    if '.' in codeinput:
+        return codeinput.split(',')
+    else:
+        return [codeinput]
+    
+
+def database_start(dbfull="/home/lzy/funds/Funds Info.db", 
+                   nThread=3, readDatabase=True,
+                   codeInput=None):
+    try: # Create database
+        conn = sql.connect(dbfull)
+    #    conn.execute("PRAGMA busy_timeout = 30000") 
+    except Exception as e:
+        print('sql connection errors in: \"{:s}\"'.format(str(e)))
+    else:
+        flag = True
+        try: # Generate table name list        
+            cur = conn.cursor()
+            tableNames = cur.execute('select name from sqlite_master where type=\"table\"').fetchall() 
+        except Exception as e:
+            print('reading sqldb errors in: \"{:s}\"'.format(str(e)))
+            print('initializing...')
+            tableNames = initDatabase(conn)
+            flag = False
+        finally: # Checking timeliness
+            tableNames = [t[0] for t in tableNames] if flag else tableNames
+            cur.execute('select * from \"{:s}\" limit 10'.format(tableNames[0]))
+            coltext = autoName(cur.description)
+            pool = Pool(nThread)
+            if not readDatabase:
+                print('Checking on specfic funds')
+                if not codeInput:
+                    tableNames = codeProcessInputs(codeInput)
+                else:
+                    print('No input')
+                
+            for table in tableNames: # Read every table                
+                pool.apply_async(func=execute_database, 
+                                 args=(table, conn, coltext,))
+            conn.close()
+            pool.close()
+            pool.join()
+                
+            
+            
+database_start()
