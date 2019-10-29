@@ -17,11 +17,15 @@ import pandas as pd
 import funds
 from multiprocessing import Pool
 
+txtDIR = './Funds_data'
+databaseFULL = '/home/lzy/funds/Funds Info.db'
+
+
 def get_FileCreateTime(filePath):
       t = os.path.getctime(filePath)
       return t
 
-def initDatabase(connection, txtdir='./Funds_data'):
+def initDatabase(connection, txtdir=txtDIR):
     tableNames = []
     os.chdir(txtdir)
     filelist = sorted(glob.glob('*.txt'))
@@ -62,7 +66,7 @@ def updateDatabase(dbtoday, connection, code, coltext):
         except Exception as e:
             print(e)
     else:
-        print('No update {:s}'.format(code))
+        print('Already Updated {:s}'.format(code))
     cursor.close()
     connection.commit() 
             
@@ -76,7 +80,8 @@ def autoName(Names):
             colstr += ('\"' + c + '\"')
     return colstr
 
-def execute_database(code, connection, coltext):
+def execute_database(code, dbname, coltext):
+    connection = sql.connect(dbname)
     cur = connection.cursor()
     top10 = cur.execute('select date from \"{:s}\" order by date desc limit 10'.format(code)).fetchall()
     try:
@@ -86,18 +91,21 @@ def execute_database(code, connection, coltext):
     else:
         updateDatabase(latestDate, connection, code, coltext)
     cur.close()
+    connection.close()
     
 
 def codeProcessInputs(codeinput):
+    if '__iter__' in dir(codeinput):
+        return codeinput
     if '.' in codeinput:
         return codeinput.split(',')
     else:
         return [codeinput]
     
 
-def database_start(dbfull="/home/lzy/funds/Funds Info.db", 
-                   nThread=3, readDatabase=True,
-                   codeInput=None):
+def database_start(dbfull=databaseFULL, 
+                   nThread=3, usingFullDB=True,
+                   codeInput=None, returnResult=False):
     try: # Create database
         conn = sql.connect(dbfull)
     #    conn.execute("PRAGMA busy_timeout = 30000") 
@@ -117,21 +125,36 @@ def database_start(dbfull="/home/lzy/funds/Funds Info.db",
             tableNames = [t[0] for t in tableNames] if flag else tableNames
             cur.execute('select * from \"{:s}\" limit 10'.format(tableNames[0]))
             coltext = autoName(cur.description)
+            conn.close()
             pool = Pool(nThread)
-            if not readDatabase:
+            if not usingFullDB:
                 print('Checking on specfic funds')
-                if not codeInput:
+                if codeInput:
                     tableNames = codeProcessInputs(codeInput)
                 else:
-                    print('No input')
-                
-            for table in tableNames: # Read every table                
-                pool.apply_async(func=execute_database, 
-                                 args=(table, conn, coltext,))
-            conn.close()
+                    print('No input')                
+            for table in tableNames: # Update every table                
+                pool.apply_async(func=execute_database, args=(table, dbfull, coltext,))
             pool.close()
             pool.join()
+            if returnResult:
+                conn = sql.connect(dbfull)
+                cur = conn.cursor()
+                returnValues = []
+                for table in tableNames:
+                    try:
+                        tabledata = cur.execute('select * from \"{:s}\" order by date desc'.format(table)).fetchall()
+                    except:
+                        print('{:s} is not included in the database.'.format(table))
+                        returnValues.append([])
+                    else:
+                        print('Reading date from {:s}'.format(table))
+                        returnValues.append(tabledata)
+                        
+                return returnValues
+                    
                 
-            
-            
-database_start()
+                
+
+
+#database_start()
