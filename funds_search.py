@@ -15,17 +15,17 @@ from funds_extrance import args
 code_name_list = args.database
 
 def processFeatures(strlist):
-    if '，' in strlist:
-        strlist.replace('，', ',')
-    
-    strlist = strlist.replace(' ', '')
-    
-    
-    if ',' in strlist:
-        strout = [s for s in strlist.split(',')]
+    if 'zfill' in dir(strlist) or 'index' in dir(strlist):
+        if '，' in strlist:
+            strlist.replace('，', ',')        
+        strlist = strlist.replace(' ', '')        
+        if ',' in strlist:
+            strout = [s for s in strlist.split(',')]
+        else:
+            strout = [strlist]
+        return strout
     else:
-        strout = [strlist]
-    return strout
+        return [strlist]
 
 def get_funds_total(dbname=code_name_list):
     if not os.path.exists(dbname):

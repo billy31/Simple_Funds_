@@ -21,31 +21,36 @@ from funds_extrance import args
 reportDir = './Reports/'
 analysisDir = './Analysis/'
 
+periodMarks = ['振荡上浮','快速上浮','快速下跌','振荡下跌','自定义时段']
+stragetyMarks = ['定百分比止盈','简单定投']
+
 FREQUENCY = [7, 14, 31]
 PROFIT = np.arange(0.05, 1.0, 0.01)
 
 Feature1 = searchF.processFeatures(args.aim)
 Feature2 = searchF.processFeatures(args.negativeaim)
 
-sdate = args.sdate
-edate = args.edate
+sdate = funds.processDate(args.sdate)
+edate = funds.processDate(args.edate)
 _code = args.code
 
 predefined_period1_concuup = [datetime.datetime(2012, 1, 1), datetime.datetime(2013, 7, 1)]
-predefined_period1_quickrise = [datetime.datetime(2013, 12, 1), datetime.datetime(2015, 6, 1)]
+predefined_period1_quickrise = [datetime.datetime(2014, 1, 1), datetime.datetime(2015, 12, 1)]
 predefined_period1_deepdrop = [datetime.datetime(2015, 8, 1), datetime.datetime(2017, 2, 1)]
 predefined_period_concudown = [datetime.datetime(2017, 1, 1), datetime.datetime(2018, 7, 1)]
+
 predefined_period_date = [sdate, edate]
-
-periods = [predefined_period1_concuup, predefined_period1_quickrise, \
-predefined_period1_deepdrop, predefined_period_concudown, predefined_period_date]
-
-
+periods = [predefined_period1_concuup, \
+           predefined_period1_quickrise, \
+           predefined_period1_deepdrop, \
+           predefined_period_concudown, \
+           predefined_period_date]
+period = periods[int(args.testingPeriod)-1] if args.testingPeriod else periods[-1]
 
 funcs = [funds.scheduled_simple_redemption]
 
 stragety = funcs[int(args.stragety)-1]
-period = periods[int(args.testingPeriod)-1] if args.testingPeriod else periods[-1]
+
 frequency_str = searchF.processFeatures(args.frequency)
 frequency = [int(f) for f in frequency_str]
 goalProfit_str = searchF.processFeatures(args.goalProfit)
@@ -60,7 +65,13 @@ selected, selected_Names = searchF.get_selected_funds(Feature1, Feature2,
 dataValue = dbF.database_start(usingFullDB=False, codeInput=selected, returnResult=True)
 
 
-def dealwithPath(outFlag, otherFeature=None, txtPointer=None):
+def dealwithPath(outFlag, period=None, otherFeature=None, txtPointer=None):
+    peidstr = periodMarks[periods.index(period)] + '_'
+    if period != None:
+        peidstr = peidstr + period[0].strftime('From_%Y%m%d') + \
+                  period[1].strftime('_To_%Y%m%d')
+    if otherFeature != None:
+        peidstr = peidstr + '_' + otherFeature
     if outFlag == True:
         print('Writing reports now...')
         try:
@@ -69,11 +80,10 @@ def dealwithPath(outFlag, otherFeature=None, txtPointer=None):
             print('\"{:s}\" exists'.format(reportDir))
         finally:
             fileOrder = str(len(os.listdir(reportDir))+1).zfill(4)
-            fileName = '{:s}_In_{:s}_Ex_{:s}'.format(fileOrder, args.aim, args.negativeaim)
-            
+            fileName = '{:s}_In_{:s}_Ex_{:s}_{:s}'.format(
+                    fileOrder, args.aim, args.negativeaim, peidstr)            
             txtName = reportDir + fileName + '.txt'
-            return txtName
-        
+            return txtName        
     if outFlag == False:
         try:
             os.mkdir(analysisDir)
@@ -81,7 +91,8 @@ def dealwithPath(outFlag, otherFeature=None, txtPointer=None):
             print('\"{:s}\" exists'.format(analysisDir))
         finally:
             fileOrder = str(len(os.listdir(analysisDir))+1).zfill(4)
-            fileName = '{:s}_In_{:s}_Ex_{:s}'.format(fileOrder, args.aim, args.negativeaim)
+            fileName = '{:s}_In_{:s}_Ex_{:s}_{:s}'.format(
+                    fileOrder, args.aim, args.negativeaim, peidstr)            
             anlyName = analysisDir + fileName + '.txt'
             return anlyName
     
@@ -91,14 +102,18 @@ def analysisdata(codeNamelist=selected_Names, codelist=selected,
                  datalist=dataValue, func=stragety, peid=period,
                  fre=frequency, gProft=goalProfit, 
                  output_report=output_report):
-    txtContent = None if output_report == None else dealwithPath(output_report)
+    
+    funcStr = stragetyMarks[funcs.index(func)]
+    
+    
+    txtContent = None if output_report == None else \
+                    dealwithPath(output_report, period=peid)
     if output_report:
         txtPrint = open(txtContent, 'w')
     else:
         txtPrint = sys.stdout
         if output_report == False:
-            outdbName = txtContent
-    
+            outdbName = txtContent    
     
     database_total = pd.DataFrame(columns=funds.colName) 
     

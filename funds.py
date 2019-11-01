@@ -17,16 +17,24 @@ import datetime
 import os, sys
 from scipy import optimize
 
-
 colName = ['code', 'name', 'sdate', 'edate', 'intervals', 'aim_%', 'invest_times',
            'redemption times', 'profit_then_%', 'profit_then_anual_%', 'profit_total_%', 
            'profit_total_annual_%', 'avdays_before_profit', 'maxdays_before_profit',
            'mindays_before_profit', 'max_withdraw']
+
 _money = 100
 
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']
 matplotlib.rcParams['font.family']='sans-serif'
 matplotlib.rcParams['axes.unicode_minus'] = False
+
+
+def processDate(inputDate):
+    if 'zfill' in dir(inputDate):
+        return datetime.datetime.strptime(inputDate, '%Y-%m-%d')
+    else:
+        return inputDate
+
 
 
 def xnpv(rate, cashflows):
@@ -169,7 +177,7 @@ def find_suitable(date, datelist, buystate):
                 dateX = date.strftime('%Y-%m-%d')
                 trytimes += 5
             else:
-                return -1        
+                return 0
     return orderID
 
 
@@ -203,7 +211,7 @@ def scheduled_simple_redemption(code, name, data, ivtime,
     sellstates = [True if '开放' in v else False for v in sellstates]
     print('Using scheduled plans with simple redemption with \n annual aimprofit at'
           '{:6.2f}% and intervals of roughly {:3d}'.format(profit*100, intervals), file=INFILE)
-    sdate, edate,  = ivtime[0], ivtime[1]    
+    sdate, edate,  =  ivtime[0], ivtime[1]    
     totalDuration = edate - sdate
     last_redp_date, latest_invest_date = sdate, sdate
     days_before_profit = []
@@ -214,21 +222,25 @@ def scheduled_simple_redemption(code, name, data, ivtime,
     funds_hold = 0
     cash_flow = []
     max_range = 0
+#    real_first_invest, real_first_invest_str = sdate, ''
     if date[-1] <= edate:
         while latest_invest_date <= edate:            
             orderNum = find_suitable(latest_invest_date, datestr, buystates)
             if orderNum == -1:
                 break
             else:
+                if times['_invest_curr'] == 1:
+                    real_first_invest = date[orderNum]
+                    real_first_invest_str = datestr[orderNum]
                 netValue, dividend = find_netValue(orderNum, values, dividend)
                 times['_invest_curr'] += 1
                 times['_invest_tot'] += 1
                 # Dividend part
-                funds_hold += (times['_invest_curr']*_money)/netValue
+                funds_hold += _money / netValue
                 dividendMoney = dividend * funds_hold
                 money['_out_divd'] += dividendMoney
                 # Current Input
-                money['_in_input'] += times['_invest_curr']*_money
+                money['_in_input'] += _money
                 # Current total
                 money['_in_current'] = funds_hold * netValue
                 print('[Invest {:3d} times at {:s}]'.format(times['_invest_tot'], \
@@ -242,7 +254,7 @@ def scheduled_simple_redemption(code, name, data, ivtime,
                     times['_redp'] += 1
                     money['_out_input'] += money['_in_input']
                     money['_out_redp'] += money['_in_current']
-                    cash_flow.append((last_redp_date, -1*money['_in_current']))
+                    cash_flow.append((last_redp_date, -1*money['_in_input']))
                     duration = (latest_invest_date - last_redp_date).days
                     print('[Income times: {:>2d}] {:s} {:>4d} days'.format( \
                           times['_redp'], datestr[orderNum], duration), \
@@ -259,49 +271,49 @@ def scheduled_simple_redemption(code, name, data, ivtime,
         # Processing
         currTotal_i = money['_in_input'] + money['_out_input']
         currTotal_o = money['_in_current'] + money['_out_redp'] + money['_out_divd']
-        if times['_redp'] > 1:        
+        if times['_redp'] >= 1:        
             cash_flow.append((last_redp_date, money['_out_redp']))
         
         # days before profits
-        max_proDays = np.max(days_before_profit) if times['_redp'] > 1 else None
-        min_proDays = np.min(days_before_profit) if times['_redp'] > 1 else None
-        av_proDays = np.mean(days_before_profit) if times['_redp'] > 1 else None
+        max_proDays = np.max(days_before_profit) if times['_redp'] >= 1 else None
+        min_proDays = np.min(days_before_profit) if times['_redp'] >= 1 else None
+        av_proDays = np.mean(days_before_profit) if times['_redp'] >= 1 else None
             
-        cash_flow_total = [(sdate, -1 * times['_invest_tot'] * _money), 
+        cash_flow_total = [(real_first_invest, -1 * times['_invest_tot'] * _money), 
                            (edate, currTotal_o)]
         # Stats
         try:
-            profit_then = money['_out_redp'] / money['_out_input'] - 1
+            profit_then = 100*(money['_out_redp'] / money['_out_input'] - 1)
         except:
             profit_then = None
-        profit_then_anual = xirr(cash_flow) if times['_redp'] > 1 else None
+        profit_then_anual = 100*xirr(cash_flow) if times['_redp'] >= 1 else None
         try:
-            profit_total = currTotal_o / currTotal_i - 1
+            profit_total = 100*(currTotal_o / currTotal_i - 1)
         except:
             profit_total = None
-        profit_total_anual = xirr(cash_flow_total) if times['_redp'] > 1 else None
+        profit_total_anual = 100*xirr(cash_flow_total) if times['_redp'] >= 1 else None
             
         print('--' * 10, file=INFILE)
         print('Total {:d} days. Invest {:d} times, redemption {:d} times, '.format(\
               totalDuration.days, times['_invest_tot'], times['_redp']), file=INFILE)
         if times['_redp'] >= 1:
             print('Previous profit {:8.2f} % [Profit of all previous '
-                  'redemptions]'.format(profit_then*100), file=INFILE)             
+                  'redemptions]'.format(profit_then), file=INFILE)             
             print('Current total profit {:8.2f} % [Profit of already '
-                  'gained]'.format(profit_total*100), file=INFILE)
+                  'gained]'.format(profit_total), file=INFILE)
         else:
             print('No profit so far', file=INFILE)
     
     # Need output to pandas dataframe
         if PRINTOUT:
-            output_data = np.array([[code, name, sdate.strftime('%Y-%m-%d'), \
+            output_data = np.array([[code, name, real_first_invest_str, \
                                      edate.strftime('%Y-%m-%d'), \
-                                     intervals, profit, times['_invest_tot'], \
+                                     intervals, 100*profit, times['_invest_tot'], \
                                      times['_redp'], \
                                      profit_then, profit_then_anual, \
                                      profit_total, profit_total_anual, \
                                      av_proDays, max_proDays, min_proDays, \
-                                     max_range]])
+                                     100*max_range]])
             output = pd.DataFrame(output_data, columns=colName)    
             return output
 #        else:
@@ -387,7 +399,7 @@ def scheduled_(code, name, data, ivtime, profit=0.12, intervals=31, \
         money['_in_input'] += times['_invest_curr']*_money
         # Current total
         money['_in_current'] = funds_hold * netValue        
-        if times['_invest_curr'] > 1 and reach_levels(\
+        if times['_invest_curr'] >= 1 and reach_levels(\
                 money['_in_input'], money['_in_current'], profit, sdate, latest_invest_date):
             # Redemption progress
             times['_redp'] += 1
@@ -410,13 +422,13 @@ def scheduled_(code, name, data, ivtime, profit=0.12, intervals=31, \
     # Processing
     currTotal_i = money['_in_input'] + money['_out_input']
     currTotal_o = money['_in_current'] + money['_out_redp'] + money['_out_divd']
-    if times['_redp'] > 1:        
+    if times['_redp'] >= 1:        
         cash_flow.append((last_redp_date, money['_out_redp']))
     
     # days before profits
-    max_proDays = np.max(days_before_profit) if times['_redp'] > 1 else None
-    min_proDays = np.min(days_before_profit) if times['_redp'] > 1 else None
-    av_proDays = np.mean(days_before_profit) if times['_redp'] > 1 else None
+    max_proDays = np.max(days_before_profit) if times['_redp'] >= 1 else None
+    min_proDays = np.min(days_before_profit) if times['_redp'] >= 1 else None
+    av_proDays = np.mean(days_before_profit) if times['_redp'] >= 1 else None
         
     cash_flow_total = [(sdate, -1 * times['_invest_tot'] * _money), 
                        (edate, currTotal_o)]
@@ -437,7 +449,7 @@ def scheduled_(code, name, data, ivtime, profit=0.12, intervals=31, \
         print('--' * 10, file=INFILE)
         print('Total {:d} days. Invest {:d} times, redemption {:d} times, '.format(\
               totalDuration.days, times['_invest_tot'], times['_redp']), file=INFILE)
-        if times['_redp'] > 1:
+        if times['_redp'] >= 1:
             print('Previous profit {:8.2f} % [Profit of all previous '
                   'redemptions]'.format(profit_then), file=INFILE) 
         else:
@@ -542,7 +554,7 @@ def strategy_scheduled_simple_callback(data, code, profit=0.12, intervals=30,
     final_duration = (edate - last_withdraw_date).days
     days_before_profit.append(final_duration)                
     current_total_money = money_outside + money_actual
-    if take_times > 1:        
+    if take_times >= 1:        
         cash_flow.append((last_withdraw_date, money_outside))
     cash_flow_total = [(sdate, -1 * invest_time_total * money_per_amount), 
                        (edate, current_total_money)]

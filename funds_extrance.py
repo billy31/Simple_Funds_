@@ -17,22 +17,22 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Keywords analysis')
 
-parser.add_argument('--aim', '-a', help='keywords', default='指数, 中证500')
+parser.add_argument('--aim', '-a', help='keywords', default='指数')
 parser.add_argument('--negativeaim', '-na', help='keywords to filter out', \
                     default='货币, 债券, 理财, 现金, 分级')
 parser.add_argument('--sdate', '-sd', help='begin date', \
-                    default=datetime.datetime.today() - datetime.timedelta(days=365))
+                    default=datetime.datetime.today() - datetime.timedelta(days=365*10))
 parser.add_argument('--edate', '-ed', help='end date', default=datetime.datetime.today())
 parser.add_argument('--testingPeriod', '-tP', help='predefined periods', default=None)
 parser.add_argument('--stragety', '-s', help='different ways to invest, see '
                     'details in ...', default=1)
-parser.add_argument('--frequency', '-f', help='how often do', default='31')
-parser.add_argument('--goalProfit', '-g', help='what is the goal profit', default='0.12')
-
+parser.add_argument('--frequency', '-f', help='how often do', default='14')
+parser.add_argument('--goalProfit', '-g', help='what is the goal profit', default='0.1')
 parser.add_argument('--output', '-ot', help='need the output in report? True as'
                     'report, False as databasefile, None as database', default=False)
+
 parser.add_argument('--single', '-sg', help='single fund', default=False)
-parser.add_argument('--code', '-fc', help='fund code', default='673101')
+parser.add_argument('--code', '-fc', help='fund code', default='040002')
 parser.add_argument('--runWithin', '-rw', help='run within this file', default=True)
 parser.add_argument('--usingOutput', '-u', default=False)
 parser.add_argument('--csvfiledir', '-cdir', default='./Analysis/')
