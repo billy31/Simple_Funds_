@@ -31,8 +31,8 @@ parser.add_argument('--goalProfit', '-g', help='what is the goal profit', defaul
 parser.add_argument('--output', '-ot', help='need the output in report? True as'
                     'report, False as databasefile, None as database', default=False)
 
-parser.add_argument('--single', '-sg', help='single fund', default=False)
-parser.add_argument('--code', '-fc', help='fund code', default='040002')
+parser.add_argument('--single', '-sg', help='single fund', default=True)
+parser.add_argument('--code', '-fc', help='fund code', default='163407')
 parser.add_argument('--runWithin', '-rw', help='run within this file', default=True)
 parser.add_argument('--usingOutput', '-u', default=False)
 parser.add_argument('--csvfiledir', '-cdir', default='./Analysis/')

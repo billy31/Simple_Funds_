@@ -177,7 +177,7 @@ def find_suitable(date, datelist, buystate):
                 dateX = date.strftime('%Y-%m-%d')
                 trytimes += 5
             else:
-                return 0
+                return -1
     return orderID
 
 
@@ -226,48 +226,47 @@ def scheduled_simple_redemption(code, name, data, ivtime,
     if date[-1] <= edate:
         while latest_invest_date <= edate:            
             orderNum = find_suitable(latest_invest_date, datestr, buystates)
-            if orderNum == -1:
-                break
-            else:
-                if times['_invest_curr'] == 1:
-                    real_first_invest = date[orderNum]
-                    real_first_invest_str = datestr[orderNum]
-                netValue, dividend = find_netValue(orderNum, values, dividend)
-                times['_invest_curr'] += 1
-                times['_invest_tot'] += 1
-                # Dividend part
-                funds_hold += _money / netValue
-                dividendMoney = dividend * funds_hold
-                money['_out_divd'] += dividendMoney
-                # Current Input
-                money['_in_input'] += _money
-                # Current total
-                money['_in_current'] = funds_hold * netValue
-                print('[Invest {:3d} times at {:s}]'.format(times['_invest_tot'], \
-                      datestr[orderNum]), end=' ')
-                current_profit_temp = (money['_in_current']/money['_in_input']-1)
-                print('Current profit {:8.2f} %'.format(current_profit_temp*100))
-                max_range = min(max_range, current_profit_temp)
-                if times['_invest_curr'] > 1 and reach_levels(\
-                        money['_in_input'], money['_in_current'], profit, sdate, latest_invest_date):
-                    # Redemption progress
-                    times['_redp'] += 1
-                    money['_out_input'] += money['_in_input']
-                    money['_out_redp'] += money['_in_current']
-                    cash_flow.append((last_redp_date, -1*money['_in_input']))
-                    duration = (latest_invest_date - last_redp_date).days
-                    print('[Income times: {:>2d}] {:s} {:>4d} days'.format( \
-                          times['_redp'], datestr[orderNum], duration), \
-                          end=' ', file=INFILE)
-                    print('In: {:8.2f}\tOut: {:8.2f}'.format(money['_in_input'], \
-                          money['_in_current']), file=INFILE)
-                    days_before_profit.append(duration)
-                    redp_times += 1
-                    last_redp_date = latest_invest_date
-                    # Clearance
-                    money['_in_input'], money['_in_current'] = 0, 0
-                    funds_hold, times['_invest_curr'] = 0, 0
-                latest_invest_date += datetime.timedelta(days=intervals)
+            netValue, dividend = find_netValue(orderNum, values, dividend)
+            times['_invest_curr'] += 1
+            times['_invest_tot'] += 1
+            if times['_invest_tot'] == 1:
+                real_first_invest = date[orderNum]
+                real_first_invest_str = datestr[orderNum]                
+                if orderNum == -1:
+                    latest_invest_date = real_first_invest
+            # Dividend part
+            funds_hold += _money / netValue
+            dividendMoney = dividend * funds_hold
+            money['_out_divd'] += dividendMoney
+            # Current Input
+            money['_in_input'] += _money
+            # Current total
+            money['_in_current'] = funds_hold * netValue
+            print('[Invest {:3d} times at {:s}]'.format(times['_invest_tot'], \
+                  datestr[orderNum]), end=' ')
+            current_profit_temp = (money['_in_current']/money['_in_input']-1)
+            print('Current profit {:8.2f} %'.format(current_profit_temp*100))
+            max_range = min(max_range, current_profit_temp)
+            if times['_invest_curr'] > 1 and reach_levels(\
+                    money['_in_input'], money['_in_current'], profit, sdate, latest_invest_date):
+                # Redemption progress
+                times['_redp'] += 1
+                money['_out_input'] += money['_in_input']
+                money['_out_redp'] += money['_in_current']
+                cash_flow.append((last_redp_date, -1*money['_in_input']))
+                duration = (latest_invest_date - last_redp_date).days
+                print('[Income times: {:>2d}] {:s} {:>4d} days'.format( \
+                      times['_redp'], datestr[orderNum], duration), \
+                      end=' ', file=INFILE)
+                print('In: {:8.2f}\tOut: {:8.2f}'.format(money['_in_input'], \
+                      money['_in_current']), file=INFILE)
+                days_before_profit.append(duration)
+                redp_times += 1
+                last_redp_date = latest_invest_date
+                # Clearance
+                money['_in_input'], money['_in_current'] = 0, 0
+                funds_hold, times['_invest_curr'] = 0, 0
+            latest_invest_date += datetime.timedelta(days=intervals)
         # Processing
         currTotal_i = money['_in_input'] + money['_out_input']
         currTotal_o = money['_in_current'] + money['_out_redp'] + money['_out_divd']
