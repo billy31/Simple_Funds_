@@ -40,11 +40,21 @@ def bestStragety(data, selectedFeature=None):
         selectedFeature = ['profit_then_%', 'avdays_before_profit', 'max_withdraw']
         data.sort_values(selectedFeature,ascending=[0, 0, 0],inplace=True)        
     else:
-        selectedFeature = (colName[s] for s in selectedFeature)
+        selectedFeature = [colName[s] for s in selectedFeature]
         ascendingx = [np.zeros(len(selectedFeature), dtype=np.byte)]
-        data.sort_values(selectedFeature,ascending=ascendingx,inplace=True)        
+        try:
+            data.sort_values(selectedFeature,ascending=ascendingx,inplace=True)
+        except:
+            data.sort_values(selectedFeature[0],ascending=[0],inplace=True)
+    print('Single combination choice:')
     print(data.iloc[:20])
-
+    print('==='*10)
+    
+    print('By fund choice:')
+    byFundChoice = data[selectedFeature[0]].groupby(data['name']).mean()   
+    print(byFundChoice.nlargest(20))
+    print('==='*10)
+    
 
 try:
     os.mkdir(args.csvfiledir)

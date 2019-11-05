@@ -65,8 +65,9 @@ selected, selected_Names = searchF.get_selected_funds(Feature1, Feature2,
 dataValue = dbF.database_start(usingFullDB=False, codeInput=selected, returnResult=True)
 
 
-def dealwithPath(outFlag, period=None, otherFeature=None, txtPointer=None):
-    peidstr = periodMarks[periods.index(period)] + '_'
+def dealwithPath(outFlag, single_code=False, period=None, otherFeature=None, 
+                 txtPointer=None):
+    peidstr = periodMarks[periods.index(period)] + ' | '
     if period != None:
         peidstr = peidstr + period[0].strftime('From_%Y%m%d') + \
                   period[1].strftime('_To_%Y%m%d')
@@ -80,8 +81,12 @@ def dealwithPath(outFlag, period=None, otherFeature=None, txtPointer=None):
             print('\"{:s}\" exists'.format(reportDir))
         finally:
             fileOrder = str(len(os.listdir(reportDir))+1).zfill(4)
-            fileName = '{:s}_In_{:s}_Ex_{:s}_{:s}'.format(
-                    fileOrder, args.aim, args.negativeaim, peidstr)            
+            if single_code:
+                fileName = '{:s} | {:s} | '.format(
+                    fileOrder, single_code, peidstr)
+            else:
+                fileName = '{:s} | In_{:s} | Ex_{:s}_{:s} | '.format(
+                        fileOrder, args.aim, args.negativeaim, peidstr)            
             txtName = reportDir + fileName + '.txt'
             return txtName        
     if outFlag == False:
@@ -91,8 +96,12 @@ def dealwithPath(outFlag, period=None, otherFeature=None, txtPointer=None):
             print('\"{:s}\" exists'.format(analysisDir))
         finally:
             fileOrder = str(len(os.listdir(analysisDir))+1).zfill(4)
-            fileName = '{:s}_In_{:s}_Ex_{:s}_{:s}'.format(
-                    fileOrder, args.aim, args.negativeaim, peidstr)            
+            if single_code:
+                fileName = '{:s} | {:s} | '.format(
+                    fileOrder, single_code, peidstr)
+            else:
+                fileName = '{:s} | In_{:s} | Ex_{:s}_{:s} | '.format(
+                        fileOrder, args.aim, args.negativeaim, peidstr)            
             anlyName = analysisDir + fileName + '.txt'
             return anlyName
     
@@ -103,11 +112,10 @@ def analysisdata(codeNamelist=selected_Names, codelist=selected,
                  fre=frequency, gProft=goalProfit, 
                  output_report=output_report):
     
-    funcStr = stragetyMarks[funcs.index(func)]
-    
+#    funcStr = stragetyMarks[funcs.index(func)]    
     
     txtContent = None if output_report == None else \
-                    dealwithPath(output_report, period=peid)
+                    dealwithPath(output_report, single_code=_code, period=peid)
     if output_report:
         txtPrint = open(txtContent, 'w')
     else:
