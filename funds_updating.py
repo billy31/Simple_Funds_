@@ -39,10 +39,36 @@ class Investment(object):
         self.printout = PRINTOUT
         self.infile = INFILE
         
-    def _initialize():
-        return 0
+    def __initialize(self):
+        date = [datetime.datetime.strptime(d[1], '%Y-%m-%d') for d in self.data]
+        ivtime = processingPeriods(self.ivtime)
+        datestr = [d[1] for d in self.data]
+        values = [v[2] for v in self.data]
+        dividend = [None if v[-1] == 'nan' else v[-1] for v in self.data]
+        buystates = ['开放' if v[5]==None else v[5] for v in self.data]
+        sellstates = ['开放' if v[6]==None else v[6] for v in self.data]
+        buystates = [False if '暂停' in v else True for v in buystates]
+        sellstates = [False if '暂停' in v else True for v in sellstates]
+        print('Using scheduled plans with simple redemption with \n annual aimprofit at'
+              '{:6.2f}% and intervals of roughly {:3d}'.format(profit*100, intervals), file=INFILE)
+        sdate, edate =  self.ivtime[0], self.ivtime[1]    
+        totalDuration = edate - sdate
+        last_redp_date, latest_invest_date = sdate, sdate
+        days_before_profit = []
+        redp_times = 0
+        times = {'_invest_curr':0, '_redp':0, '_invest_tot':0}
+        money = {'_in_input':0, '_in_current':0, '_out_input':0, 
+                 '_out_redp':0, '_out_divd':0}
+        funds_hold = 0
+        cash_flow = []
+        max_range = 0
         
+    
+    
         
+    
+    
+    __initialize()
         
         
         

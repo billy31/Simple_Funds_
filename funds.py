@@ -22,30 +22,57 @@ colName = ['code', 'name', 'sdate', 'edate', 'intervals', 'aim_%', 'invest_times
            'profit_total_annual_%', 'avdays_before_profit', 'maxdays_before_profit',
            'mindays_before_profit', 'max_withdraw']
 
+singleColName = ['date', '_in_invest', '_in_total', '_out_invest', '_out_total', 'action']
+
 _money = 100
 
 matplotlib.rcParams['font.sans-serif'] = ['SimHei']
 matplotlib.rcParams['font.family']='sans-serif'
 matplotlib.rcParams['axes.unicode_minus'] = False
 
+#------------------------------------------Utilities-------------------------------------------------------
 
 def processDate(inputDate):
+    '''
+    Processing input data text
+    '''
     if 'zfill' in dir(inputDate):
         return datetime.datetime.strptime(inputDate, '%Y-%m-%d')
     else:
         return inputDate
 
 
+def processingPeriods(Periods):
+    '''
+    Processing the input args of periods
+    '''
+    if 'year' in dir(Periods[0]):        
+        return Periods
+    else:
+        return [datetime.datetime.strptime(Periods[0], '%Y-%m-%d'), 
+                datetime.datetime.strptime(Periods[1], '%Y-%m-%d')]    
+        
+    
+def processingSingleGraphs(data, code, sdate, edate, featureX):
+    if not os.path.exists('./Graphs'):
+        os.mkdir('./Graphs')
+    outName = str(code) + ' | From ' + sdate + ' to ' + edate + ' | ' + featureX + '.txt'
+    data.to_csv('./Graphs/'+outName, sep='\t')
+    print('output for single graphs')    
+    
 
-def xnpv(rate, cashflows):
+def xnpv(rate, cashflows):    
     return sum([cf/(1+rate)**((t-cashflows[0][0]).days/365.0) for (t,cf) in cashflows])
  
 def xirr(cashflows, guess=0.1):
+    '''
+    Series functions to calculate profit % per year
+    '''
     try:
         return optimize.newton(lambda r: xnpv(r,cashflows),guess)
     except:
-        print('Calc Wrong')
-
+        print('Calc Wrong')        
+        
 
 def get_url(url, params=None, proxies=None):
     rsp = requests.get(url, params=params, proxies=proxies)
@@ -53,24 +80,46 @@ def get_url(url, params=None, proxies=None):
     return rsp.text
 
 
+def str2float(contents):
+    '''
+    Processing contents into float values
+    '''
+    try:
+        c = re.search(r'-?\d+\.?\d*e?-?\d*?', contents).group()
+    except:
+        return 0
+    else:
+        return float(c)
+
+
+
+
+
+#-------------------------------------Funding supporting functions ----------------------------------------
+
+
 def get_fund_data(code,sdate='',edate='',online=False, per=10,proxies=None):
+    '''
+    Acquireing data of the selected fund
+    '''
     print('Getting fund data of {:s}'.format(code))
     try:
         if online:
             url = 'http://fund.eastmoney.com/f10/F10DataApi.aspx'
-            params = {'type': 'lsjz', 'code': code, 'page':1,'per': per, 'sdate': sdate, 'edate': edate}
+            params = {'type': 'lsjz', 'code': code, 'page':1,'per': per, 
+                      'sdate': sdate, 'edate': edate}
             html = get_url(url, params, proxies)
             soup = BeautifulSoup(html, 'html.parser')
             pattern=re.compile(r'pages:(.*),')
             result=re.search(pattern,html).group(1)
             pages=int(result)    
             heads = []
-            for head in soup.findAll("th"):
-                heads.append(head.contents[0])    
+            for head in soup.findAll("th"): heads.append(head.contents[0])    
             records = []    
             page=1
             while page<=pages:
-                params = {'type': 'lsjz', 'code': code, 'page':page,'per': per, 'sdate': sdate, 'edate': edate}
+                params = {'type': 'lsjz', 'code': code, 'page':page,'per': per, 
+                          'sdate': sdate, 'edate': edate}
                 html = get_url(url, params, proxies)
                 soup = BeautifulSoup(html, 'html.parser')   
                 for row in soup.findAll("tbody")[0].findAll("tr"):
@@ -85,80 +134,43 @@ def get_fund_data(code,sdate='',edate='',online=False, per=10,proxies=None):
                 page=page+1    
             np_records = np.array(records)
             data= pd.DataFrame()
-            for col,col_name in enumerate(heads):
-                data[col_name] = np_records[:,col]
+            for col,col_name in enumerate(heads): data[col_name] = np_records[:,col]
             # Un-chinese usage
             data.columns = ['Date', 'Value', 'Cumulative net Value', 'Growth rate', 
                             'Perchase state', 'Redemption state', 'Dividend']
 #            data.to_csv('./Funds_data/{:s}.txt'.format(code), sep='\t')
         else:
-            data = pd.read_csv('./Funds_data/{:s}.txt'.format(code), sep='\t', 
-                               index_col=False)    
+            data = pd.read_csv('./Funds_data/{:s}.txt'.format(code), sep='\t', index_col=False)    
         return data
+    
     except:
         print('Not enough data')
-        return pd.DataFrame(columns=['Date', 'Value', 'Cumulative net Value', 'Growth rate', 'Perchase state', 'Redemption state', 'Dividend'])
-
-
-
-
-def get_value_to_analysis(code, sdate='2016-01-01', edate=datetime.date.today()):
-    aimfunddb = get_fund_data(code, sdate, edate)
-    sdate = datetime.datetime.strptime(sdate, '%Y-%m-%d').date()
-    print(aimfunddb)
-    if aimfunddb.shape[0] == 0:
-        print('The database is empty')
-        return 
-    db_edate = datetime.datetime.strptime(aimfunddb['Date'].values[0], '%Y-%m-%d')        
-    if db_edate.date() <= sdate:
-        print('The database does not have enough data')
-        return 
-    else:
-        print('This fund runs from {:s} to {:s} [Aim: from {:s} to {:s}]'.format(
-              aimfunddb['Date'].values[-1], aimfunddb['Date'].values[0],
-              sdate.strftime('%Y-%m-%d'),edate.strftime('%Y-%m-%d')))    
-        x_line = [datetime.datetime.strptime(x, '%Y-%m-%d') for x in aimfunddb['Date'].values.tolist()]
-        y_line = [float(y) for y in aimfunddb['Value'].values.tolist()]
-        plt.plot(x_line, y_line)
-        plt.show()
-        
-#        for interv in [7, 14, 31]:
-#            for aimProfit in np.arange(0.1, 0.21, 0.01):
-#        print('Interval {:2d} days, Aimprofit {:.2f}'.format(interv, aimProfit))
-                
-#                outDb = funds.strategy_scheduled_simple_callback(aimfunddb, 
-#                                                                 code, aimfunddb
-#                                                                 [aimfund['code'].values[0], item], 
-#                                                                 profit=aimProfit, intervals=interv)
-#                try:
-#                    database = database.append(outDb, ignore_index=True)
-#                except:
-#                    print('Continue!')
-def interpting(contents):
-    try:
-        c = re.search(r'-?\d+\.?\d*e?-?\d*?', contents).group()
-    except:
-        return 0
-    else:
-        return float(c)
+        return pd.DataFrame(columns=['Date', 'Value', 'Cumulative net Value', 
+                                     'Growth rate', 'Perchase state', 'Redemption state', 
+                                     'Dividend'])
         
         
 def find_netValue(orderID, value, dividend):
+    '''
+    Get netValues/dividend of at the selected day
+    '''
     netValue = value[orderID]
     try:
-        protion = interpting(dividend[orderID])
+        protion = str2float(dividend[orderID])
     except:
         protion = 0
     return [netValue, protion]
     
 
 def find_suitable(date, datelist, buystate, times):
+    '''
+    Get the date id where it has valid value and able to buy then
+    '''
     dateX = date.strftime('%Y-%m-%d')
     orderID = -1
     bstate = False
     trytimes = 0
-    if date < datetime.datetime.strptime(datelist[-1], '%Y-%m-%d'):
-        return -1
+    if date < datetime.datetime.strptime(datelist[-1], '%Y-%m-%d'): return -1
     while (not bstate) and (orderID):
         try:            
             orderID = datelist.index(dateX)
@@ -169,18 +181,10 @@ def find_suitable(date, datelist, buystate, times):
                 else:
                     return -1 * orderID
         except:
-            if trytimes <= 30:
+            if trytimes <= 120:
                 date += datetime.timedelta(days=1)
                 dateX = date.strftime('%Y-%m-%d')
-                trytimes += 1
-            elif trytimes <= 90:                
-                date += datetime.timedelta(days=2)
-                dateX = date.strftime('%Y-%m-%d')
                 trytimes += 2
-            elif trytimes <= 120:
-                date += datetime.timedelta(days=5)
-                dateX = date.strftime('%Y-%m-%d')
-                trytimes += 5
             else:
                 if date >= datetime.datetime.strptime(datelist[-1], '%Y-%m-%d'):
                     return 99999
@@ -189,47 +193,56 @@ def find_suitable(date, datelist, buystate, times):
     return orderID
 
 
-
 def reach_levels(currInput, currTotal, aimProfit, sdate, edate):    
+    '''
+    Test if the av anual profit reach the aim profit %
+    '''
     years = int((edate - sdate).days / 365) + 1
     currprofit = (currTotal - currInput) / currInput
     Flag = True if currprofit >= aimProfit * years else False
     return Flag
 
 
-def processingPeriods(Periods):
-    if 'year' in dir(Periods[0]):        
-        return Periods
-    else:
-        return [datetime.datetime.strptime(Periods[0], '%Y-%m-%d'), 
-                datetime.datetime.strptime(Periods[1], '%Y-%m-%d')]
+
+#-------------------------------------Funding action functions ----------------------------------------
 
 
-def action_buy(orderNum, date, datestr, money, times, dividend, values, funds_hold):
-    
+
+def action_buy(orderNum, date, datestr, money, times, dividend, values, funds_hold, single, eachTime=_money):
+    '''
+    Buy the funds
+    '''
     netValue, dividend = find_netValue(orderNum, values, dividend)
     times['_invest_curr'] += 1
     times['_invest_tot'] += 1
     # Dividend part
-    funds_hold += _money / netValue
+    funds_hold += eachTime / netValue
     dividendMoney = dividend * funds_hold
     money['_out_divd'] += dividendMoney
     # Current Input
-    money['_in_input'] += _money
+    money['_in_input'] += eachTime
     # Current total
     money['_in_current'] = funds_hold * netValue
     print('[Invest {:3d} times at {:s}]'.format(times['_invest_tot'], \
           datestr[orderNum]), end=' ')
     current_profit_temp = (money['_in_current']/money['_in_input']-1)
     print('Current profit {:8.2f} %'.format(current_profit_temp*100))
-    return funds_hold, current_profit_temp
+    
+    outSingle = pd.DataFrame([[datestr[orderNum], money['_in_input'],
+                               money['_in_current'], money['_out_input'],
+                               money['_out_redp'], 1]], columns=singleColName) \
+                if single else \
+                pd.DataFrame([[None, None, None, None, None, None]], columns=singleColName)
+    
+    return funds_hold, current_profit_temp, outSingle
 #    return money, times, 
     
 
-def action_sell(orderNum, date, money, times, funds_hold, cash_flow, datestr,
-                latest_invest_date, last_redp_date, redp_times, INFILE, 
-                days_before_profit):
-    # Redemption progress
+def action_sell(orderNum, date, money, times, funds_hold, cash_flow, datestr, latest_invest_date, last_redp_date, 
+                redp_times, INFILE, days_before_profit, single):
+    '''
+    Redemption progress
+    '''
     times['_redp'] += 1
     money['_out_input'] += money['_in_input']
     money['_out_redp'] += money['_in_current']
@@ -245,13 +258,21 @@ def action_sell(orderNum, date, money, times, funds_hold, cash_flow, datestr,
     # Clearance
     money['_in_input'], money['_in_current'] = 0, 0
     times['_invest_curr'] = 0
-    return 0, latest_invest_date  # funds_hold, latest_invest_date
+    
+    outSingle = pd.DataFrame([[datestr[orderNum], money['_in_input'],
+                               money['_in_current'], money['_out_input'],
+                               money['_out_redp'], -1]], columns=singleColName) \
+                if single else \
+                pd.DataFrame([[None, None, None, None, None, None]], columns=singleColName)
+    
+    return 0, latest_invest_date, outSingle  # funds_hold, latest_invest_date    
     
     
-    
-def action_keep(orderNum, money, times, values, dividend, datestr, funds_hold):
-    netValue, dividend = find_netValue(orderNum, values, dividend)
-    # Update current total money
+def action_keep(orderNum, money, times, values, dividend, datestr, funds_hold, single):
+    '''
+    Update current total money
+    '''    
+    netValue, dividend = find_netValue(orderNum, values, dividend)    
     money['_in_current'] = funds_hold * netValue
     print('[Hold] at {:s}'.format(datestr[orderNum]), end=' ')
     if money['_in_input'] != 0:
@@ -259,14 +280,22 @@ def action_keep(orderNum, money, times, values, dividend, datestr, funds_hold):
         print('Current profit {:8.2f} %'.format(current_profit_temp*100))    
     else:
         print('No money inside, waiting to join.')
-    
+       
+    outSingle = pd.DataFrame([[datestr[orderNum], money['_in_input'],
+                               money['_in_current'], money['_out_input'],
+                               money['_out_redp'], 0]], columns=singleColName) \
+                if single else \
+                pd.DataFrame([[None, None, None, None, None, None]], columns=singleColName)
+                
+    return outSingle
+     
+        
 
 
-
-def scheduled_simple_redemption(code, name, data, ivtime, 
-                                profit=0.12, 
-                                intervals=31,
-                                PRINTOUT=True, INFILE=sys.stdout):
+def action_initialize(data, ivtime):
+    '''
+    Initialization of the funds
+    '''
     date = [datetime.datetime.strptime(d[1], '%Y-%m-%d') for d in data]
     ivtime = processingPeriods(ivtime)
     datestr = [d[1] for d in data]
@@ -275,8 +304,7 @@ def scheduled_simple_redemption(code, name, data, ivtime,
                             ['开放' if v[6]==None else v[6] for v in data]
     buystates = [False if '暂停' in v else True for v in buystates]
     sellstates = [False if '暂停' in v else True for v in sellstates]
-    print('Using scheduled plans with simple redemption with \n annual aimprofit at'
-          '{:6.2f}% and intervals of roughly {:3d}'.format(profit*100, intervals), file=INFILE)
+    
     sdate, edate,  =  ivtime[0], ivtime[1]    
     totalDuration = edate - sdate
     last_redp_date, latest_invest_date = sdate, sdate
@@ -287,52 +315,174 @@ def scheduled_simple_redemption(code, name, data, ivtime,
              '_out_redp':0, '_out_divd':0}
     funds_hold = 0
     cash_flow = []
+    return date, ivtime, datestr, values, dividend, sdate, edate, totalDuration,\
+    last_redp_date, latest_invest_date, days_before_profit, redp_times, times, money,\
+    funds_hold, cash_flow, buystates, sellstates
+
+
+  
+#-------------------------------------Redeption strageties----------------------------------------
+
+
+
+def scheduled_simple_holds(code, name, data, ivtime, profit=0.12, intervals=31, PRINTOUT=True, INFILE=sys.stdout, singleGraph=False):
+    '''
+    Scheduled investment
+    No redemption until the latest day
+    '''
+    print('Using scheduled plans with simple redemption with \n annual aimprofit at'
+          '{:6.2f}% and intervals of roughly {:3d}'.format(profit*100, intervals), file=INFILE)
+    
+    singleCode = pd.DataFrame(columns=singleColName)
+    
+    date, ivtime, datestr, values, dividend, sdate, edate, totalDuration,\
+    last_redp_date, latest_invest_date, days_before_profit, redp_times, times, money,\
+    funds_hold, cash_flow, buystates, sellstates = action_initialize(data, ivtime)
+        
     max_range = 0
-#    real_first_invest, real_first_invest_str = sdate, ''
+    
     if date[-1] <= edate:
         while latest_invest_date <= edate:  
-            if times['_invest_tot'] >= 2000:
-                print('May have problems')
+            if times['_invest_tot'] >= 2000: print('May have problems')  # In case
+            orderNum = find_suitable(latest_invest_date, datestr, buystates, times['_invest_tot'])                        
             
-            orderNum = find_suitable(latest_invest_date, datestr, buystates, 
-                                     times['_invest_tot'])                        
             if orderNum >= -1:
-                if orderNum == 99999:
-                    break
-                latest_invest_date = date[orderNum]
-                funds_hold, current_profit_temp = action_buy(orderNum, date, datestr, 
-                                                             money, times, dividend, 
-                                                             values, funds_hold)
-                
+                if orderNum == 99999: break # In case 
+                latest_invest_date = date[orderNum] # Get the date
+                funds_hold, current_profit_temp, singlecode = action_buy(orderNum, date, datestr, money, times, dividend, values, funds_hold, singleGraph)                
+                singleCode = singleCode.append(singlecode)
                 max_range = min(max_range, current_profit_temp)
+                
+                # fix the starting date
                 if times['_invest_tot'] == 1:
                     real_first_invest = date[orderNum]
                     real_first_invest_str = datestr[orderNum]                
                     if orderNum == -1:
                         latest_invest_date = real_first_invest
                         last_redp_date = real_first_invest
-                        totalDuration = edate - real_first_invest
-                                    
-                if times['_invest_curr'] > 1 and \
-                    reach_levels(money['_in_input'], money['_in_current'], profit, 
-                                 last_redp_date, latest_invest_date) and \
-                                 sellstates[orderNum]:
-                    funds_hold, last_redp_date = action_sell(orderNum, date, money, times, funds_hold, 
-                                                             cash_flow, datestr, latest_invest_date, 
-                                                             last_redp_date, redp_times, 
-                                                             INFILE, days_before_profit)
+                        totalDuration = edate - real_first_invest                                    
+            else:
+                orderNum = -1 * orderNum
+                singlecode = action_keep(orderNum, money, times, values, dividend, datestr, funds_hold, singleGraph)                
+                singleCode = singleCode.append(singlecode)
+                
+            latest_invest_date += datetime.timedelta(days=intervals)
+            
+        funds_hold, last_redp_date = action_sell(orderNum, date, money, times, funds_hold, cash_flow, datestr, latest_invest_date, 
+                                                 last_redp_date, redp_times, INFILE, days_before_profit)    
+        
+        # Processing
+        currTotal_i = money['_in_input'] + money['_out_input']
+        currTotal_o = money['_in_current'] + money['_out_redp'] + money['_out_divd']
+        if times['_redp'] >= 1: cash_flow.append((last_redp_date, money['_out_redp']))
+        
+        # days before profits
+        max_proDays = np.max(days_before_profit) if times['_redp'] >= 1 else None
+        min_proDays = np.min(days_before_profit) if times['_redp'] >= 1 else None
+        av_proDays = np.median(days_before_profit) if times['_redp'] >= 1 else None
+            
+        cash_flow_total = [(real_first_invest, -1 * times['_invest_tot'] * _money), (edate, currTotal_o)]
+        # Stats
+        try:
+            profit_then = 100*(money['_out_redp'] / money['_out_input'] - 1)
+        except:
+            profit_then = None
+        profit_then_anual = 100*xirr(cash_flow) if times['_redp'] >= 1 else None
+        try:
+            profit_total = 100*(currTotal_o / currTotal_i - 1)
+        except:
+            profit_total = None
+        profit_total_anual = 100*xirr(cash_flow_total) if times['_redp'] >= 1 else None
+            
+        print('--' * 10, file=INFILE)
+        print('Total {:d} days. Invest {:d} times, redemption {:d} times, '.format(\
+              totalDuration.days, times['_invest_tot'], times['_redp']), file=INFILE)
+        if times['_redp'] >= 1:
+            print('Previous profit {:8.2f} % [Profit of all previous redemptions]'.format(profit_then), file=INFILE)             
+            print('Current total profit {:8.2f} % [Profit of already gained]'.format(profit_total), file=INFILE)
+        else:
+            print('No profit so far', file=INFILE)
+            
+            
+        if singleGraph:
+            featureInput = ' Profit {:.2f} | Frequency {:2d}'.format(profit, intervals)
+            processingSingleGraphs(singleCode, code, real_first_invest_str, datestr[0], featureInput)
+        
+            
+    # Need output to pandas dataframe
+        if PRINTOUT:
+            output_data = np.array([[code, name, real_first_invest_str, edate.strftime('%Y-%m-%d'), \
+                                     intervals, 100*profit, times['_invest_tot'], times['_redp'], \
+                                     profit_then, profit_then_anual, profit_total, profit_total_anual, \
+                                     av_proDays, max_proDays, min_proDays, 100*max_range]])
+            output = pd.DataFrame(output_data, columns=colName)    
+            return output
+#        else:
+#            return [sdate.strftime('%Y-%m-%d'), edate.strftime('%Y-%m-%d'), \
+#                    intervals, profit, times['_invest_tot'], \
+#                    times['_redp'], \
+#                    profit_then, profit_then_anual, \
+#                    profit_total, profit_total_anual, \
+#                    av_proDays, max_proDays, min_proDays]
+    else:
+        print('Not enough data', file=INFILE)
+        if PRINTOUT:
+            output = pd.DataFrame(columns=colName)
+            return output    
+    
+    
+
+
+#============================================================================
+
+
+
+def scheduled_simple_redemption(code, name, data, ivtime, profit=0.12, intervals=31, PRINTOUT=True, INFILE=sys.stdout, singleGraph=False):
+    '''
+    Scheduled investment
+    Redempt when the profit meet the anually aim
+    '''
+    
+    singleCode = pd.DataFrame(columns=singleColName)
+    print('Using scheduled plans with simple redemption with \n annual aimprofit at'
+          '{:6.2f}% and intervals of roughly {:3d}'.format(profit*100, intervals), file=INFILE)
+    
+    date, ivtime, datestr, values, dividend, sdate, edate, totalDuration,\
+    last_redp_date, latest_invest_date, days_before_profit, redp_times, times, money,\
+    funds_hold, cash_flow, buystates, sellstates = action_initialize(data, ivtime)
+        
+    max_range = 0
+    
+    if date[-1] <= edate:
+        while latest_invest_date <= edate:  
+            if times['_invest_tot'] >= 2000: print('May have problems')            
+            orderNum = find_suitable(latest_invest_date, datestr, buystates, times['_invest_tot'])      
+                  
+            if orderNum >= -1:
+                if orderNum == 99999: break
+                latest_invest_date = date[orderNum]
+                funds_hold, current_profit_temp, singlecode = action_buy(orderNum, date, datestr, money, times, dividend, values, funds_hold, singleGraph)                
+                singleCode = singleCode.append(singlecode)
+                
+                max_range = min(max_range, current_profit_temp)
+                
+                # fix the starting date
+                if times['_invest_tot'] == 1:
+                    real_first_invest = date[orderNum]
+                    real_first_invest_str = datestr[orderNum]                
+                    if orderNum == -1:
+                        latest_invest_date, last_redp_date = real_first_invest, real_first_invest
+                        totalDuration = edate - real_first_invest                                    
             else:
                 orderNum = -1*orderNum
-                action_keep(orderNum, money, times, values, dividend, 
-                            datestr, funds_hold)
-                if times['_invest_curr'] > 1 and \
-                    reach_levels(money['_in_input'], money['_in_current'], profit, 
-                                 last_redp_date, latest_invest_date) and \
-                                 sellstates[orderNum]:
-                    funds_hold, last_redp_date = action_sell(orderNum, date, money, times, funds_hold, 
-                                                             cash_flow, datestr, latest_invest_date, 
-                                                             last_redp_date, redp_times, 
-                                                             INFILE, days_before_profit)           
+                singlecode = action_keep(orderNum, money, times, values, dividend, datestr, funds_hold, singleGraph)
+                singleCode = singleCode.append(singlecode)
+                
+            if times['_invest_curr'] > 1 and sellstates[orderNum] and \
+            reach_levels(money['_in_input'], money['_in_current'], profit, last_redp_date, latest_invest_date):
+                funds_hold, last_redp_date, singlecode = action_sell(orderNum, date, money, times, funds_hold, cash_flow, datestr, latest_invest_date, 
+                                                         last_redp_date, redp_times, INFILE, days_before_profit, singleGraph)
+                singleCode = singleCode.append(singlecode)
             
             latest_invest_date += datetime.timedelta(days=intervals)
         # Processing
@@ -370,6 +520,13 @@ def scheduled_simple_redemption(code, name, data, ivtime,
                   'gained]'.format(profit_total), file=INFILE)
         else:
             print('No profit so far', file=INFILE)
+            
+            
+            
+        if singleGraph:
+            featureInput = ' Profit {:3.2f} | Frequency {:2d}'.format(profit, intervals)
+            processingSingleGraphs(singleCode, code, real_first_invest_str, datestr[0], featureInput)
+            
     
     # Need output to pandas dataframe
         if PRINTOUT:
@@ -414,6 +571,131 @@ def scheduled_simple_redemption(code, name, data, ivtime,
         
     
     
+#============================================================================   
+            
+        
+def scheduled_simple_redemption_enhanced(code, name, data, ivtime, profit=0.12, intervals=31, PRINTOUT=True, INFILE=sys.stdout, singleGraph=False):
+    
+    '''
+    Scheduled investment
+    Redempt when the profit meet the anually aim
+    The investment per time may vary
+    '''
+    
+    singleCode = pd.DataFrame(columns=singleColName)
+    print('Using scheduled plans with simple redemption with \n annual aimprofit at'
+          '{:6.2f}% and intervals of roughly {:3d}'.format(profit*100, intervals), file=INFILE)
+    
+    date, ivtime, datestr, values, dividend, sdate, edate, totalDuration,\
+    last_redp_date, latest_invest_date, days_before_profit, redp_times, times, money,\
+    funds_hold, cash_flow, buystates, sellstates = action_initialize(data, ivtime)
+        
+    max_range = 0
+    
+    if date[-1] <= edate:
+        while latest_invest_date <= edate:  
+            if times['_invest_tot'] >= 2000: print('May have problems')            
+            orderNum = find_suitable(latest_invest_date, datestr, buystates, times['_invest_tot'])      
+                  
+            if orderNum >= -1:
+                if orderNum == 99999: break
+                latest_invest_date = date[orderNum]
+                funds_hold, current_profit_temp, singlecode = action_buy(orderNum, date, datestr, money, times, dividend, values, funds_hold, singleGraph)                
+                singleCode = singleCode.append(singlecode)
+                
+                max_range = min(max_range, current_profit_temp)
+                
+                # fix the starting date
+                if times['_invest_tot'] == 1:
+                    real_first_invest = date[orderNum]
+                    real_first_invest_str = datestr[orderNum]                
+                    if orderNum == -1:
+                        latest_invest_date, last_redp_date = real_first_invest, real_first_invest
+                        totalDuration = edate - real_first_invest                                    
+            else:
+                orderNum = -1*orderNum
+                singlecode = action_keep(orderNum, money, times, values, dividend, datestr, funds_hold, singleGraph)
+                singleCode = singleCode.append(singlecode)
+                
+            if times['_invest_curr'] > 1 and sellstates[orderNum] and \
+            reach_levels(money['_in_input'], money['_in_current'], profit, last_redp_date, latest_invest_date):
+                funds_hold, last_redp_date, singlecode = action_sell(orderNum, date, money, times, funds_hold, cash_flow, datestr, latest_invest_date, 
+                                                         last_redp_date, redp_times, INFILE, days_before_profit, singleGraph)
+                singleCode = singleCode.append(singlecode)
+            
+            latest_invest_date += datetime.timedelta(days=intervals)
+        # Processing
+        currTotal_i = money['_in_input'] + money['_out_input']
+        currTotal_o = money['_in_current'] + money['_out_redp'] + money['_out_divd']
+        if times['_redp'] >= 1:        
+            cash_flow.append((last_redp_date, money['_out_redp']))
+        
+        # days before profits
+        max_proDays = np.max(days_before_profit) if times['_redp'] >= 1 else None
+        min_proDays = np.min(days_before_profit) if times['_redp'] >= 1 else None
+        av_proDays = np.median(days_before_profit) if times['_redp'] >= 1 else None
+            
+        cash_flow_total = [(real_first_invest, -1 * times['_invest_tot'] * _money), 
+                           (edate, currTotal_o)]
+        # Stats
+        try:
+            profit_then = 100*(money['_out_redp'] / money['_out_input'] - 1)
+        except:
+            profit_then = None
+        profit_then_anual = 100*xirr(cash_flow) if times['_redp'] >= 1 else None
+        try:
+            profit_total = 100*(currTotal_o / currTotal_i - 1)
+        except:
+            profit_total = None
+        profit_total_anual = 100*xirr(cash_flow_total) if times['_redp'] >= 1 else None
+            
+        print('--' * 10, file=INFILE)
+        print('Total {:d} days. Invest {:d} times, redemption {:d} times, '.format(\
+              totalDuration.days, times['_invest_tot'], times['_redp']), file=INFILE)
+        if times['_redp'] >= 1:
+            print('Previous profit {:8.2f} % [Profit of all previous '
+                  'redemptions]'.format(profit_then), file=INFILE)             
+            print('Current total profit {:8.2f} % [Profit of already '
+                  'gained]'.format(profit_total), file=INFILE)
+        else:
+            print('No profit so far', file=INFILE)
+            
+            
+            
+        if singleGraph:
+            featureInput = ' Profit {:.2f} | Frequency {:2d}'.format(profit, intervals)
+            processingSingleGraphs(singleCode, code, real_first_invest_str, datestr[0], featureInput)
+            
+
+    # Need output to pandas dataframe
+        if PRINTOUT:
+            output_data = np.array([[code, name, real_first_invest_str, \
+                                     edate.strftime('%Y-%m-%d'), \
+                                     intervals, 100*profit, times['_invest_tot'], \
+                                     times['_redp'], \
+                                     profit_then, profit_then_anual, \
+                                     profit_total, profit_total_anual, \
+                                     av_proDays, max_proDays, min_proDays, \
+                                     100*max_range]])
+            output = pd.DataFrame(output_data, columns=colName)    
+            return output
+#        else:
+#            return [sdate.strftime('%Y-%m-%d'), edate.strftime('%Y-%m-%d'), \
+#                    intervals, profit, times['_invest_tot'], \
+#                    times['_redp'], \
+#                    profit_then, profit_then_anual, \
+#                    profit_total, profit_total_anual, \
+#                    av_proDays, max_proDays, min_proDays]
+    else:
+        print('Not enough data', file=INFILE)
+        if PRINTOUT:
+            output = pd.DataFrame(columns=colName)
+            return output
+
+
+        
+    
+#============================================================================    
     
     
     
@@ -429,6 +711,17 @@ def scheduled_simple_redemption(code, name, data, ivtime,
     
     
     
+    
+    
+    
+    
+
+
+
+
+    
+    
+#------------------------------------Wasted-------------------------------------------   
     
 
 def scheduled_(code, name, data, ivtime, profit=0.12, intervals=31, \
@@ -536,17 +829,6 @@ def scheduled_(code, name, data, ivtime, profit=0.12, intervals=31, \
         output = pd.DataFrame(output_data, columns=colName)    
         return output
     
-
-
-
-
-
-
-
-
-
-
-
 def reached_or_not(currentProfit, aimProfit, sdate, edate):    
     years = int((edate - sdate).days / 365) + 1
     Flag = True if currentProfit >= (aimProfit * years + 1) else False
@@ -731,3 +1013,28 @@ def strategy_scheduled_simple_callback(data, code, profit=0.12, intervals=30,
 #    print('??????:',sum(np.isnan(daily_growth_rate)))
 #    print('?????????:',sum(daily_growth_rate>0))
 #    print('??????(??0)???:',sum(daily_growth_rate<=0))
+        
+    
+    
+def get_value_to_analysis(code, sdate='2016-01-01', edate=datetime.date.today()):
+    '''
+    Get the data of a selected fund
+    '''
+    aimfunddb = get_fund_data(code, sdate, edate)
+    sdate = datetime.datetime.strptime(sdate, '%Y-%m-%d').date()
+    print(aimfunddb)
+    if aimfunddb.shape[0] == 0:
+        print('The database is empty')
+        return 
+    db_edate = datetime.datetime.strptime(aimfunddb['Date'].values[0], '%Y-%m-%d')        
+    if db_edate.date() <= sdate:
+        print('The database does not have enough data')
+        return 
+    else:
+        print('This fund runs from {:s} to {:s} [Aim: from {:s} to {:s}]'.format(
+              aimfunddb['Date'].values[-1], aimfunddb['Date'].values[0],
+              sdate.strftime('%Y-%m-%d'),edate.strftime('%Y-%m-%d')))    
+        x_line = [datetime.datetime.strptime(x, '%Y-%m-%d') for x in aimfunddb['Date'].values.tolist()]
+        y_line = [float(y) for y in aimfunddb['Value'].values.tolist()]
+        plt.plot(x_line, y_line)
+        plt.show()

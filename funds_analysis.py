@@ -6,7 +6,8 @@ Created on Thu Oct 17 22:43:53 2019
 @author: gladro
 """
 
-import funds 
+#from funds import funds as funds
+import funds
 import funds_search as searchF
 import funds_database as dbF
 import pandas as pd
@@ -22,7 +23,7 @@ reportDir = './Reports/'
 analysisDir = './Analysis/'
 
 periodMarks = ['振荡上浮','快速上浮','快速下跌','振荡下跌','自定义时段']
-stragetyMarks = ['定百分比止盈','简单定投']
+stragetyMarks = ['定百分比止盈','简单定投','']
 
 FREQUENCY = [7, 14, 31]
 PROFIT = np.arange(0.05, 1.0, 0.01)
@@ -45,9 +46,10 @@ periods = [predefined_period1_concuup, \
            predefined_period1_deepdrop, \
            predefined_period_concudown, \
            predefined_period_date]
+
 period = periods[int(args.testingPeriod)-1] if args.testingPeriod else periods[-1]
 
-funcs = [funds.scheduled_simple_redemption]
+funcs = [funds.scheduled_simple_redemption, funds.scheduled_simple_holds]
 
 stragety = funcs[int(args.stragety)-1]
 
@@ -59,20 +61,20 @@ output_report = args.output
 
 Feature1 = searchF.processFeatures(args.aim)
 Feature2 = searchF.processFeatures(args.negativeaim)
-selected, selected_Names = searchF.get_selected_funds(Feature1, Feature2, 
-                                                      args.single, _code)
+selected, selected_Names = searchF.get_selected_funds(Feature1, Feature2, args.single, _code)
 
 dataValue = dbF.database_start(usingFullDB=False, codeInput=selected, returnResult=True)
 
 
-def dealwithPath(outFlag, single_code=False, period=None, otherFeature=None, 
-                 txtPointer=None):
-    peidstr = periodMarks[periods.index(period)] + ' | '
+def dealwithPath(outFlag, single_code=False, period=None, otherFeature=None, txtPointer=None):
+    '''
+    Generate name for files
+    '''
+    peidstr = periodMarks[periods.index(period)] + ' '#' | ' + 
     if period != None:
-        peidstr = peidstr + period[0].strftime('From_%Y%m%d') + \
-                  period[1].strftime('_To_%Y%m%d')
+        peidstr = peidstr + period[0].strftime('From_%Y%m%d') + period[1].strftime('_To_%Y%m%d')
     if otherFeature != None:
-        peidstr = peidstr + '_' + otherFeature
+        peidstr = peidstr + ' | ' + otherFeature
     if outFlag == True:
         print('Writing reports now...')
         try:
@@ -82,11 +84,9 @@ def dealwithPath(outFlag, single_code=False, period=None, otherFeature=None,
         finally:
             fileOrder = str(len(os.listdir(reportDir))+1).zfill(4)
             if single_code:
-                fileName = '{:s} | {:s} | '.format(
-                    fileOrder, single_code, peidstr)
+                fileName = '{:s} | {:s} | {:s}'.format(fileOrder, single_code, peidstr)
             else:
-                fileName = '{:s} | In_{:s} | Ex_{:s}_{:s} | '.format(
-                        fileOrder, args.aim, args.negativeaim, peidstr)            
+                fileName = '{:s} | In_{:s} | Ex_{:s} | {:s}'.format(fileOrder, args.aim, args.negativeaim, peidstr)            
             txtName = reportDir + fileName + '.txt'
             return txtName        
     if outFlag == False:
@@ -97,31 +97,29 @@ def dealwithPath(outFlag, single_code=False, period=None, otherFeature=None,
         finally:
             fileOrder = str(len(os.listdir(analysisDir))+1).zfill(4)
             if single_code:
-                fileName = '{:s} | {:s} | '.format(
-                    fileOrder, single_code, peidstr)
+                fileName = '{:s} | {:s} | {:s}'.format(fileOrder, single_code, peidstr)
             else:
-                fileName = '{:s} | In_{:s} | Ex_{:s}_{:s} | '.format(
-                        fileOrder, args.aim, args.negativeaim, peidstr)            
+                fileName = '{:s} | In_{:s} | Ex_{:s} | {:s}'.format(fileOrder, args.aim, args.negativeaim, peidstr)            
             anlyName = analysisDir + fileName + '.txt'
             return anlyName
     
 
 
-def analysisdata(codeNamelist=selected_Names, codelist=selected, 
-                 datalist=dataValue, func=stragety, peid=period,
-                 fre=frequency, gProft=goalProfit, 
-                 output_report=output_report):
+def analysisdata(codeNamelist=selected_Names, codelist=selected, datalist=dataValue, func=stragety, peid=period,
+                 fre=frequency, gProft=goalProfit, output_report=output_report):
+    '''
+    Main part to analyze the selected data
+    '''    
     
-#    funcStr = stragetyMarks[funcs.index(func)]    
+    funcStr = stragetyMarks[funcs.index(func)]    
     
     txtContent = None if output_report == None else \
-                    dealwithPath(output_report, single_code=_code, period=peid)
+                    dealwithPath(output_report, single_code=_code, period=peid, otherFeature=funcStr)
     if output_report:
         txtPrint = open(txtContent, 'w')
     else:
         txtPrint = sys.stdout
-        if output_report == False:
-            outdbName = txtContent    
+        if output_report == False: outdbName = txtContent    
     
     database_total = pd.DataFrame(columns=funds.colName) 
     
@@ -132,15 +130,13 @@ def analysisdata(codeNamelist=selected_Names, codelist=selected,
         
         print('Basic infomation:')        
         if data == []:
-            print('{:s}-{:s} is not recorded by the database'.format(name, code), 
-                  file=txtPrint)
+            print('{:s}-{:s} is not recorded by the database'.format(name, code), file=txtPrint)
         else:                        
             dbdate = [datetime.datetime.strptime(d[1], '%Y-%m-%d') for d in data]
             dbdate_str = [d[1] for d in data]
             print('Analysing {:s}-{:s}'.format(name, code),file=txtPrint)            
             print('This fund runs from {:s} to {:s}'.format(dbdate_str[-1], dbdate_str[0]))
-            print('Aim to run from {:s} to {:s}'.format(\
-                  period[0].strftime('%Y-%m-%d'), 
+            print('Aim to run from {:s} to {:s}'.format(period[0].strftime('%Y-%m-%d'), \
                   period[1].strftime('%Y-%m-%d')))
             
             if dbdate[0] <= peid[0]:
@@ -150,8 +146,7 @@ def analysisdata(codeNamelist=selected_Names, codelist=selected,
                 for f in fre:
                     for g in gProft:
                         if outDBFlag:
-                            dbout = func(code, name, data, period, g, f, \
-                                         outDBFlag, txtPrint)
+                            dbout = func(code, name, data, period, g, f, outDBFlag, txtPrint, args.single)
                             database_total = database_total.append(dbout)                    
                         else:
                             func(code, name, data, period, g, f, outDBFlag, txtPrint)        
@@ -172,7 +167,13 @@ def analysisdata(codeNamelist=selected_Names, codelist=selected,
 #def p
         
     
+    
+#----------------------------------MAIN PART-----------------------------------    
 if args.runWithin:
+    analysisdata(fre=frequency, gProft=goalProfit)
+    
+    
+    
 #    pool = Pool(3)
 #    if output_report == False:
 #        database = pd.DataFrame(columns=funds.colName)    
@@ -184,7 +185,6 @@ if args.runWithin:
 #    else:
 #        for f in frequency:
 #            for aimP in goalProfit:
-    analysisdata(fre=frequency, gProft=goalProfit)
 #        
 #    pool.close()
 #    pool.join()       
