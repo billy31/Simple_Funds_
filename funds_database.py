@@ -18,7 +18,7 @@ import funds
 from multiprocessing import Pool
 
 txtDIR = './Funds_data'
-databaseFULL = '/home/lzy/funds/Funds Info.db'
+databaseFULL = './Funds Info.db'
 
 
 def get_FileCreateTime(filePath):

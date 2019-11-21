@@ -88,7 +88,7 @@ def dealwithPath(outFlag, single_code=False, period=None, otherFeature=None, txt
             else:
                 fileName = '{:s} | In_{:s} | Ex_{:s} | {:s}'.format(fileOrder, args.aim, args.negativeaim, peidstr)            
             txtName = reportDir + fileName + '.txt'
-            return txtName        
+            return txtName 
     if outFlag == False:
         try:
             os.mkdir(analysisDir)
